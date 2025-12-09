@@ -9,6 +9,7 @@ dependencies = [
     "alembic>=1.17.2",
     "faker>=38.2.0",
     "fastapi>=0.124.0",
+    "google-api-python-client>=2.187.0",
     "httpx>=0.28.1",
     "psycopg2-binary>=2.9.11",
     "pyjwt>=2.10.1",

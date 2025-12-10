@@ -63,7 +63,7 @@ async def init_deposit(
             user = await session.get(User, principal["api_key"][0].user_id)  # type: ignore
 
         wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))
-        wallet = wallet.first()[0]  # type: ignore
+        wallet = wallet.scalars().first()  # type: ignore
         print(wallet)
 
         if not wallet:
@@ -151,7 +151,7 @@ async def paystack_webhook(
     status = data.get("status")
 
     tx = await session.execute(select(Transaction).where(Transaction.reference == ref))
-    tx = tx.first()  # type: ignore
+    tx = tx.scalars().first()  # type: ignore
     print("Transaction: ", tx)
 
     if not tx:
@@ -164,7 +164,7 @@ async def paystack_webhook(
 
         async with session.begin():
             w = await session.execute(select(Wallet).where(Wallet.id == tx.wallet_id))
-            w = w.first()
+            w = w.scalars().first()
             w.balance += tx.amount  # type: ignore
 
         tx.status = TransactionStatus.success
@@ -204,7 +204,7 @@ async def deposit_status(
     tx = await session.execute(
         select(Transaction).where(Transaction.reference == reference)
     )
-    tx = tx.first()
+    tx = tx.scalars().first()
 
     if not tx:
         raise HTTPException(404, "not found")
@@ -234,7 +234,7 @@ async def balance(
         user = await session.get(User, principal["api_key"][0].user_id)
 
     wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))  # type: ignore
-    wallet = wallet.first()  # type: ignore
+    wallet = wallet.scalars().first()  # type: ignore
 
     if not wallet:
         raise HTTPException(404, "Wallet not found")
@@ -272,12 +272,12 @@ async def transfer(
         actor = await session.get(User, principal["api_key"][0].user_id)
 
     sender = await session.execute(select(Wallet).where(Wallet.user_id == actor.id))  # type: ignore
-    sender = sender.first()  # type: ignore
+    sender = sender.scalars().first()  # type: ignore
 
     recipient = await session.execute(
         select(Wallet).where(Wallet.wallet_number == req.wallet_number)
     )
-    recipient = recipient.first()  # type: ignore
+    recipient = recipient.scalars().first()  # type: ignore
 
     if not recipient:
         raise HTTPException(404, "recipient not found")
@@ -345,7 +345,7 @@ async def transactions(
         user = await session.get(User, principal["api_key"].user_id)
     print(user)
     wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))  # type: ignore
-    wallet = wallet.first()
+    wallet = wallet.scalars().first()
     txs = await session.execute(
         select(Transaction)
         .where(Transaction.id == user.id)  # type: ignore

@@ -58,9 +58,9 @@ async def init_deposit(
     require_permission(principal, "deposit")
     try:
         if principal["type"] == "user":
-            user: User = principal["user"][0]
+            user: User = principal["user"]
         else:
-            user = await session.get(User, principal["api_key"][0].user_id)  # type: ignore
+            user = await session.get(User, principal["api_key"].user_id)  # type: ignore
 
         wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))
         wallet = wallet.scalars().first()  # type: ignore
@@ -234,9 +234,9 @@ async def balance(
     require_permission(principal, "read")
 
     if principal["type"] == "user":
-        user = principal["user"][0]
+        user = principal["user"]
     else:
-        user = await session.get(User, principal["api_key"][0].user_id)
+        user = await session.get(User, principal["api_key"].user_id)
 
     wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))  # type: ignore
     wallet = wallet.scalars().first()  # type: ignore
@@ -274,7 +274,7 @@ async def transfer(
     if principal["type"] == "user":
         actor = principal["user"]
     else:
-        actor = await session.get(User, principal["api_key"][0].user_id)
+        actor = await session.get(User, principal["api_key"].user_id)
 
     sender = await session.execute(select(Wallet).where(Wallet.user_id == actor.id))  # type: ignore
     sender = sender.scalars().first()  # type: ignore
@@ -345,7 +345,7 @@ async def transactions(
     """
     require_permission(principal, "read")
     if principal["type"] == "user":
-        user = principal["user"][0]
+        user = principal["user"]
     else:
         user = await session.get(User, principal["api_key"].user_id)
     print(user)
@@ -359,7 +359,7 @@ async def transactions(
     txs = txs.all()
     out = [
         {
-            "type": t.tx_type.value,
+            "type": t.tx_type,
             "amount": t.amount,
             "status": t.status.value,
             "reference": t.reference,

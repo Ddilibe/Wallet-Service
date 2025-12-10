@@ -45,7 +45,7 @@ async def get_principal(
                 raise HTTPException(status_code=401, detail="Invalid token")
 
             query = await session.execute(select(User).where(User.id == user_id))
-            user = query.first()
+            user = query.scalars().first()
 
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
@@ -61,13 +61,13 @@ async def get_principal(
             query = await session.execute(
                 select(APIKey).where(APIKey.key_hash == hash_api_key(x_api_key))
             )
-            key = query.first()
+            key = query.scalars().first()
 
             if not key or key.revoked or key.expires_at > datetime.now(timezone.utc):
                 raise HTTPException(status_code=401, detail="Invalid API key")
 
             query = await session.execute(select(User).where(User.id == key.user_id))
-            user = query.first()
+            user = query.scalars().first()
 
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")

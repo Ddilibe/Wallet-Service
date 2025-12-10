@@ -54,7 +54,7 @@ async def create_key(
         raise HTTPException(
             status_code=401, detail="Unauthorized\nOnly users may create API keys"
         )
-    user = principal["user"][0]
+    user = principal["user"]
 
     now_utc = datetime.now(timezone.utc)
     user_id = user.id
@@ -127,7 +127,7 @@ async def rollover(
     now_utc = datetime.now(timezone.utc)
     print(ak)
 
-    if not ak or ak.user_id != principal["user"][0].id or ak.revoked:
+    if not ak or ak.user_id != principal["user"].id or ak.revoked:
         raise HTTPException(status_code=404, detail="API key not found")
 
     aware_expires_at = ak.expires_at.replace(tzinfo=timezone.utc)

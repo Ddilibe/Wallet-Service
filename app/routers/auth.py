@@ -1,41 +1,92 @@
 #!/usr/bin/env python3
+import uuid
+
 import jwt
 from faker import Faker
 from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException
+from authlib.integrations.starlette_client import OAuth
 
-from app.models import User
-from app.core import get_settings
+from app.models import User, Wallet
 from app.database import get_session
+from app.core import get_settings
 
 auth = APIRouter(prefix="/auth", tags=["auth"])
 fake = Faker()
 settings = get_settings()
 
+oauth = OAuth()
+oauth.register(
+    name="google",
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_id=settings.GOOGLE_CLIENT_ID,
+    client_secret=settings.GOOGLE_CLIENT_SECRET,
+    client_kwargs={
+        "scope": "openid email profile",
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+    },
+)
+
 
 @auth.get("/google")
-async def google():
-    return JSONResponse({})
+async def google(request: Request):
+    """
+    Build redirect URI dynamically from the incoming request so the state cookie is set for the same host/port that initiated the flow.
+    This prevents CSRF mismatching_state when the configured static redirect URI doesn't match the actual request host/port.
+    """
+    redirect_uri = request.url_for("google_callback")
+
+    # IMPORTANT: force absolute URL
+    redirect_uri = str(redirect_uri)
+
+    return await oauth.google.authorize_redirect(  # type: ignore
+        request, redirect_uri=redirect_uri
+    )
 
 
 @auth.get("/google/callback")
-async def google_callback(session: AsyncSession = Depends(get_session)):
-    new_user = User(email=fake.email(), name=fake.name())
-    session.add(new_user)
-    await session.commit()
+async def google_callback(
+    request: Request, session: AsyncSession = Depends(get_session)
+):
+    try:
+        token = await oauth.google.authorize_access_token(request)  # type: ignore
 
-    query = await session.execute(select(User).where(User.id == new_user.id))
+        print("GOOGLE TOKEN:", token)
 
-    payload = query.first()
-    if not payload:
-        raise HTTPException(
-            status_code=404, detail="Invalid call on google callback function"
-        )
+    except Exception as e:
+        print("GOOGLE OAUTH ERROR:", e)
+        raise HTTPException(status_code=400, detail="Google OAuth failed")
+
+    user_info = token.get("userinfo")
+    if not user_info:
+        raise HTTPException(status_code=400, detail="Failed to retrieve user info")
+
+    email = user_info["email"]
+    name = user_info.get("name", "Unknown")
+
+    query = await session.execute(select(User).where(User.email == email))
+    existing_user = query.scalars().first()
+
+    if existing_user:
+        user = existing_user
+    else:
+        user = User(email=email, name=name)
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+
+        wallet = Wallet(user_id=user.id, balance=0, wallet_number=str(uuid.uuid4())[:6])
+        session.add(wallet)
+        await session.commit()
+        await session.refresh(wallet)
+
     token = jwt.encode(
-        payload=new_user.model_dump(),
+        payload=user.model_dump(),
         key=settings.JWT_SECRET,
         algorithm=settings.JWT_ALGORITHM,
     )
-    return JSONResponse({"access_token": str(token), "token_type": "bearer"})
+
+    return JSONResponse({"access_token": token, "token_type": "bearer"})

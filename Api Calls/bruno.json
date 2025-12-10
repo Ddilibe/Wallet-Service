@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "name": "Api Calls",
+  "name": "api_calls",
   "type": "collection",
   "ignore": [
     "node_modules",
@@ -10,6 +10,6 @@
   "filesCount": 0,
   "presets": {
     "requestType": "http",
-    "requestUrl": "http://localhost:2222"
+    "requestUrl": "http://127.0.0.1:2222"
   }
 }

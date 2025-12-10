@@ -1,0 +1,15 @@
+meta {
+  name: Balance
+  type: http
+  seq: 4
+}
+
+get {
+  url: http://localhost:2222/wallet/balance
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

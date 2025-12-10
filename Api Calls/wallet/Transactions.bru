@@ -1,0 +1,15 @@
+meta {
+  name: Transactions
+  type: http
+  seq: 5
+}
+
+get {
+  url: http://127.0.0.1:2222/wallet/transactions
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

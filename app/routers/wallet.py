@@ -8,11 +8,13 @@ import requests
 from sqlmodel import select, desc
 from fastapi import APIRouter, Depends, Request, HTTPException
 
+from app.models import User
 from app.core import get_settings
 from app.database import get_session
 from app.schemas import DepositReq, TransferReq
-from app.models import Wallet, Transaction, TransactionStatus, TransactionType, User
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.deps import get_principal, require_permission, get_settings, get_session
+from app.models import Wallet, Transaction, TransactionStatus, TransactionType, User
 
 wallet = APIRouter(prefix="/wallet", tags=["wallet"])
 
@@ -20,52 +22,63 @@ settings = get_settings()
 
 
 @wallet.post("/deposit")
-def init_deposit(
-    req: DepositReq, principal=Depends(get_principal), session=Depends(get_session)
+async def init_deposit(
+    req: DepositReq,
+    principal=Depends(get_principal),
+    session: AsyncSession = Depends(get_session),
 ):
     require_permission(principal, "deposit")
+    try:
+        if principal["type"] == "user":
+            user: User = principal["user"][0]
+        else:
+            user = await session.get(User, principal["api_key"][0].user_id)  # type: ignore
 
-    if principal["type"] == "user":
-        user = principal["user"]
-    else:
-        user = session.get(User, principal["api_key"].user_id)
+        wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))
+        wallet = wallet.first()[0]  # type: ignore
+        print(wallet)
 
-    wallet = session.exec(select(Wallet).where(Wallet.user_id == user.id)).first()
+        if not wallet:
+            raise HTTPException(404, "Wallet not found")
 
-    if not wallet:
-        raise HTTPException(404, "Wallet not found")
+        ref = "ps_" + secrets.token_urlsafe(12)
 
-    ref = "ps_" + secrets.token_urlsafe(12)
+        tx = Transaction(
+            id=wallet.id,
+            tx_type=TransactionType.deposit,
+            amount=req.amount,
+            status=TransactionStatus.pending,
+            reference=ref,
+            user_id=user.id,  # type: ignore
+        )
+        session.add(tx)
+        await session.commit()
+        # call paystack
+        resp = requests.post(
+            "https://api.paystack.co/transaction/initialize",
+            headers={
+                "Authorization": f"Bearer {settings.PAYSTACK_PUBLIC_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={"amount": req.amount, "reference": ref, "email": user.email},
+        )
 
-    tx = Transaction(
-        id=wallet.id,
-        tx_type=TransactionType.deposit,
-        amount=req.amount,
-        status=TransactionStatus.pending,
-        reference=ref,
-        user_id=user.id,
-    )
-    session.add(tx)
-    session.commit()
-    # call paystack
-    resp = requests.post(
-        "https://api.paystack.co/transaction/initialize",
-        headers={
-            "Authorization": f"Bearer {settings.PAYSTACK_PUBLIC_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={"amount": req.amount, "reference": ref, "email": user.email},
-    )
+        if not resp.ok:
+            raise HTTPException(502, "Paystack initialize failed")
 
-    if not resp.ok:
-        raise HTTPException(502, "Paystack initialize failed")
-
-    data = resp.json()
-    return {"reference": ref, "authorization_url": data["data"]["authorization_url"]}
+        data = resp.json()
+        return {
+            "reference": ref,
+            "authorization_url": data["data"]["authorization_url"],
+        }
+    except Exception:
+        raise HTTPException(status_code=502, detail="Paystack Initialization failed")
 
 
 @wallet.post("/paystack/webhook")
-async def paystack_webhook(request: Request, session=Depends(get_session)):
+async def paystack_webhook(
+    request: Request, session: AsyncSession = Depends(get_session)
+):
 
     body = await request.body()
     sig = request.headers.get("x-paystack-signature")
@@ -85,7 +98,8 @@ async def paystack_webhook(request: Request, session=Depends(get_session)):
     ref = data.get("reference")
     status = data.get("status")
 
-    tx = session.exec(select(Transaction).where(Transaction.reference == ref)).first()
+    tx = await session.execute(select(Transaction).where(Transaction.reference == ref))
+    tx = tx.first()[0]  # type: ignore
 
     if not tx:
         return {"status": True}
@@ -95,54 +109,60 @@ async def paystack_webhook(request: Request, session=Depends(get_session)):
 
     if status == "success":
 
-        with session.begin():
-            w = session.exec(select(Wallet).where(Wallet.id == tx.wallet_id)).one()
-            w.balance += tx.amount
+        async with session.begin():
+            w = await session.execute(select(Wallet).where(Wallet.id == tx.wallet_id))
+            w = w.first()
+            w.balance += tx.amount  # type: ignore
 
         tx.status = TransactionStatus.success
         tx.updated_at = datetime.now(timezone.utc)
 
         session.add(w)
         session.add(tx)
-        session.commit()
+        await session.commit()
 
         return {"status": True}
     else:
         tx.status = TransactionStatus.failed
 
         session.add(tx)
-        session.commit()
+        await session.commit()
 
         return {"status": True}
 
 
 @wallet.get("/deposit/{reference}/status")
-def deposit_status(
+async def deposit_status(
     reference: str, principal=Depends(get_principal), session=Depends(get_session)
 ):
     require_permission(principal, "read")
 
-    tx = session.exec(
+    tx = await session.execute(
         select(Transaction).where(Transaction.reference == reference)
-    ).first()
+    )
+    tx = tx.first()[0]
 
     if not tx:
         raise HTTPException(404, "not found")
+    print(tx)
 
     return {"reference": reference, "status": tx.status.value, "amount": tx.amount}
 
 
 @wallet.get("/balance")
-def balance(principal=Depends(get_principal), session=Depends(get_session)):
+async def balance(
+    principal=Depends(get_principal), session: AsyncSession = Depends(get_session)
+):
 
     require_permission(principal, "read")
 
     if principal["type"] == "user":
-        user = principal["user"]
+        user = principal["user"][0]
     else:
-        user = session.get(User, principal["api_key"].user_id)
+        user = await session.get(User, principal["api_key"][0].user_id)
 
-    wallet = session.exec(select(Wallet).where(Wallet.user_id == user.id)).first()
+    wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))  # type: ignore
+    wallet = wallet.first()[0]  # type: ignore
 
     if not wallet:
         raise HTTPException(404, "Wallet not found")
@@ -151,21 +171,25 @@ def balance(principal=Depends(get_principal), session=Depends(get_session)):
 
 
 @wallet.post("/transfer")
-def transfer(
-    req: TransferReq, principal=Depends(get_principal), session=Depends(get_session)
+async def transfer(
+    req: TransferReq,
+    principal=Depends(get_principal),
+    session: AsyncSession = Depends(get_session),
 ):
     require_permission(principal, "transfer")
 
     if principal["type"] == "user":
         actor = principal["user"]
     else:
-        actor = session.get(User, principal["api_key"].user_id)
+        actor = await session.get(User, principal["api_key"][0].user_id)
 
-    sender = session.exec(select(Wallet).where(Wallet.user_id == actor.id)).first()
+    sender = await session.execute(select(Wallet).where(Wallet.user_id == actor.id))  # type: ignore
+    sender = sender.first()[0]  # type: ignore
 
-    recipient = session.exec(
+    recipient = await session.execute(
         select(Wallet).where(Wallet.wallet_number == req.wallet_number)
-    ).first()
+    )
+    recipient = recipient.first()[0]  # type: ignore
 
     if not recipient:
         raise HTTPException(404, "recipient not found")
@@ -173,9 +197,11 @@ def transfer(
     if sender.balance < req.amount:
         raise HTTPException(400, "insufficient balance")
 
-    with session.begin():
-        s = session.exec(select(Wallet).where(Wallet.id == sender.id)).one()
-        r = session.exec(select(Wallet).where(Wallet.id == recipient.id)).one()
+    async with session.begin():
+        s = await session.execute(select(Wallet).where(Wallet.id == sender.id))
+        s = s.one()
+        r = await session.execute(select(Wallet).where(Wallet.id == recipient.id))
+        r = r.one()
 
         if s.balance < req.amount:
             raise HTTPException(400, "insufficient balance")
@@ -190,7 +216,7 @@ def transfer(
             amount=-req.amount,
             status=TransactionStatus.success,
             reference=ref,
-            user_id=actor.id,
+            user_id=actor.id,  # type: ignore
         )
 
         tx2 = Transaction(
@@ -199,33 +225,38 @@ def transfer(
             amount=req.amount,
             status=TransactionStatus.success,
             reference=ref,
-            user_id=actor.id,
+            user_id=actor.id,  # type: ignore
         )
 
         session.add(s)
         session.add(r)
         session.add(tx1)
         session.add(tx2)
-        session.commit()
-        session.refresh(tx1)
-        session.refresh(tx2)
+        await session.commit()
+        await session.refresh(tx1)
+        await session.refresh(tx2)
 
     return {"status": "success", "message": "Transfer completed"}
 
 
 @wallet.get("/transactions")
-def transactions(principal=Depends(get_principal), session=Depends(get_session)):
+async def transactions(
+    principal=Depends(get_principal), session: AsyncSession = Depends(get_session)
+):
     require_permission(principal, "read")
     if principal["type"] == "user":
-        user = principal["user"]
+        user = principal["user"][0]
     else:
-        user = session.get(User, principal["api_key"].user_id)
-    wallet = session.exec(select(Wallet).where(Wallet.user_id == user.id)).first()
-    txs = session.exec(
+        user = await session.get(User, principal["api_key"].user_id)
+    print(user)
+    wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))  # type: ignore
+    wallet = wallet.first()
+    txs = await session.execute(
         select(Transaction)
-        .where(Transaction.id == wallet.id)
+        .where(Transaction.id == user.id)  # type: ignore
         .order_by(desc(Transaction.created_at))
-    ).all()
+    )
+    txs = txs.all()
     out = [
         {
             "type": t.tx_type.value,

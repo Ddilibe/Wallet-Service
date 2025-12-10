@@ -138,7 +138,7 @@ async def paystack_webhook(
 
     computed = hmac.new(
         key=settings.PAYSTACK_SECRET_KEY.encode("utf-8"),
-        msg=f"{payload}".encode(),
+        msg=body,
         digestmod=hashlib.sha512,
     ).hexdigest()
     print("Computed Signature: ", computed)

@@ -4,7 +4,7 @@ from typing import Optional, List
 from datetime import datetime, timezone
 
 from pydantic import field_serializer
-from sqlmodel import SQLModel, JSON, Field, Relationship
+from sqlmodel import SQLModel, JSON, Field, Relationship, TIMESTAMP, Column
 
 
 class Permission(str, enum.Enum):
@@ -17,11 +17,14 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(index=True, nullable=False)
     name: Optional[str]
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
+    )
+
     wallet: Optional["Wallet"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"uselist": False}
     )
-    # permissions: List[Permission] = Field
 
     @field_serializer("created_at")
     def serialize_created_At(self, dt: datetime) -> str:
@@ -38,7 +41,10 @@ class Wallet(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", unique=True)
     balance: float = Field(default=0.0)
     wallet_number: str = Field(index=True, unique=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
+    )
     user: Optional[User] = Relationship(back_populates="wallet")
 
 
@@ -62,10 +68,18 @@ class Transaction(SQLModel, table=True):
     status: TransactionStatus = Field(default=TransactionStatus.pending)
     reference: Optional[str] = Field(index=True, unique=True)
     meta: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
+    )
+
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        sa_column=dict(onupdate=lambda: datetime.now(timezone.utc)),
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            onupdate=lambda: datetime.now(timezone.utc),
+            nullable=False,
+        ),
     )
 
 
@@ -76,6 +90,11 @@ class APIKey(SQLModel, table=True):
     name: str
     permissions: str = Field(sa_column=JSON)
     fingerprint: str
-    expires_at: datetime
+    expires_at: datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+    )
     revoked: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
+    )

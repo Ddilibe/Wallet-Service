@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-from sqlmodel import SQLModel, JSON, Field
+import enum
 from typing import Optional, List
 from datetime import datetime, timezone
-import enum
+
+from pydantic import field_serializer
+from sqlmodel import SQLModel, JSON, Field
 
 
 class Permission(str, enum.Enum):
@@ -17,6 +19,11 @@ class User(SQLModel, table=True):
     name: Optional[str]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     # permissions: List[Permission] = Field
+
+    @field_serializer('created_at')
+    def serialize_published_at(self, dt: datetime) -> str:
+        """Converts the datetime object to a specific ISO-8601 string format."""
+        return dt.isoformat(timespec='seconds') + "Z"
 
 
 class Wallet(SQLModel, table=True):

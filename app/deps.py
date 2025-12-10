@@ -6,6 +6,7 @@ from datetime import datetime, timezone, timedelta
 
 import jwt
 from sqlmodel import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Header, HTTPException, Depends
 
 from app.core import get_settings
@@ -24,6 +25,7 @@ async def get_principal(
     x_api_key: Optional[str] = Header(None),
     session=Depends(get_session),
 ):
+    print(authorization)
     if authorization:
         parts = authorization.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":

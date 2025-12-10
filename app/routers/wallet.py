@@ -72,7 +72,6 @@ async def init_deposit(
         ref = "ps_" + secrets.token_urlsafe(12)
 
         tx = Transaction(
-            id=wallet.id,
             tx_type=TransactionType.deposit,
             amount=req.amount,
             status=TransactionStatus.pending,
@@ -99,7 +98,8 @@ async def init_deposit(
             "reference": ref,
             "authorization_url": data["data"]["authorization_url"],
         }
-    except Exception:
+    except Exception as e:
+        print(e)
         raise HTTPException(status_code=502, detail="Paystack Initialization failed")
 
 
@@ -133,13 +133,15 @@ async def paystack_webhook(
 
     payload = await request.json()
     print("Payload: ", payload)
+    print("Body: ", body)
+    print("Signature: ", sig)
 
     computed = hmac.new(
-        key=settings.PAYSTACK_SECRET_KEY.encode("utf-8"),  
-        msg=payload,
-        digestmod=hashlib.sha512
+        key=settings.PAYSTACK_SECRET_KEY.encode("utf-8"),
+        msg=f"{payload}".encode(),
+        digestmod=hashlib.sha512,
     ).hexdigest()
-    print("Computed Signature: ",computed)
+    print("Computed Signature: ", computed)
 
     if not hmac.compare_digest(computed, sig):
         raise HTTPException(400, "Invalid signature")
@@ -296,7 +298,6 @@ async def transfer(
         ref = "tr_" + secrets.token_urlsafe(10)
 
         tx1 = Transaction(
-            id=s.id,
             tx_type=TransactionType.transfer,
             amount=-req.amount,
             status=TransactionStatus.success,
@@ -305,7 +306,6 @@ async def transfer(
         )
 
         tx2 = Transaction(
-            id=r.id,
             tx_type=TransactionType.transfer,
             amount=req.amount,
             status=TransactionStatus.success,

@@ -103,7 +103,7 @@ async def init_deposit(
         raise HTTPException(status_code=502, detail="Paystack Initialization failed")
 
 
-@wallet.post(
+@wallet.get(
     "/paystack/webhook",
     summary="Paystack webhook",
     description=(
@@ -125,6 +125,7 @@ async def paystack_webhook(
     """
 
     body = await request.body()
+    print(request.headers)
     sig = request.headers.get("x-paystack-signature")
 
     if not sig:

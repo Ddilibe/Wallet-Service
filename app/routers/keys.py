@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""API key management routes.
+
+Endpoints to create and rollover API keys. These endpoints require an
+authenticated principal and enforce per-user limits and permissions.
+"""
 import json
 import secrets
 from datetime import datetime, timezone
@@ -16,12 +21,34 @@ from app.deps import get_principal, hash_api_key, parse_expiry
 keys = APIRouter(prefix="/keys", tags=["keys"])
 
 
-@keys.post("/create")
+@keys.post(
+    "/create",
+    summary="Create API key",
+    description=(
+        "Create a new API key for the authenticated user. A user may have up "
+        "to 5 active API keys. Returns a plaintext API key (fingerprint + "
+        "secret) and expiration information."
+    ),
+)
 async def create_key(
     req: CreateKeyReq,
     principal=Depends(get_principal),
     session: AsyncSession = Depends(get_session),
 ):
+    """Create a new API key for the requesting user.
+
+    Args:
+        req: payload containing key name, permissions, and expiry.
+        principal: resolved principal from API key or user auth.
+        session: database session.
+
+    Returns:
+        JSON object with `api_key` (fingerprint.secret) and `expires_at`.
+
+    Raises:
+        HTTPException(401) if principal is not a user.
+        HTTPException(400) if the user already has 5 active keys.
+    """
     print(principal["user"])
     if principal["type"] != "user":
         raise HTTPException(
@@ -63,12 +90,34 @@ async def create_key(
     return {"api_key": f"{fingerprint}.{raw}", "expires_at": ak.expires_at.isoformat()}
 
 
-@keys.post("/rollover")
+@keys.post(
+    "/rollover",
+    summary="Rollover an API key",
+    description=(
+        "Replace an existing API key's secret with a new one (rotate the "
+        "key). Requires the caller to own the key. Returns the new key "
+        "plaintext secret."
+    ),
+)
 async def rollover(
     req: RolloverReq,
     principal=Depends(get_principal),
     session: AsyncSession = Depends(get_session),
 ):
+    """Rotate an existing API key's secret.
+
+    Args:
+        req: contains the id of the API key to rollover and desired expiry.
+        principal: caller principal (must be the owning user).
+        session: database session.
+
+    Returns:
+        JSON object with new `api_key` and `expires_at`.
+
+    Raises:
+        HTTPException(401) if caller is not a user.
+        HTTPException(404) if key not found or not owned by caller.
+    """
     if principal["type"] != "user":
         raise HTTPException(
             status_code=401, detail="Unauthorized\nOnly users may rollover API keys"

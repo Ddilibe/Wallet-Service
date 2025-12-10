@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""Authentication routes.
+
+Endpoints to start and complete Google OAuth sign-in. These handlers use
+Authlib and rely on session middleware to persist OAuth `state` between the
+authorize request and the callback.
+"""
 import uuid
 
 import jwt
@@ -31,7 +37,15 @@ oauth.register(
 )
 
 
-@auth.get("/google")
+@auth.get(
+    "/google",
+    summary="Start Google sign-in",
+    description=(
+        "Begin the OAuth2 flow by redirecting the user to Google's consent "
+        "page. The OAuth state is saved in the session so the callback can "
+        "validate it."
+    ),
+)
 async def google(request: Request):
     """
     Build redirect URI dynamically from the incoming request so the state cookie is set for the same host/port that initiated the flow.
@@ -47,7 +61,15 @@ async def google(request: Request):
     )
 
 
-@auth.get("/google/callback")
+@auth.get(
+    "/google/callback",
+    summary="Google OAuth2 callback",
+    description=(
+        "Callback endpoint for Google's OAuth2 flow. Validates the state, "
+        "exchanges the authorization code for tokens, and returns an "
+        "application JWT. Requires SessionMiddleware to be configured."
+    ),
+)
 async def google_callback(
     request: Request, session: AsyncSession = Depends(get_session)
 ):

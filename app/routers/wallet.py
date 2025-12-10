@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""Wallet-related endpoints.
+
+Includes deposit initialization, Paystack webhook handling, balance and
+transfer operations and transaction listing. Endpoints require appropriate
+permissions which are enforced using dependency helpers.
+"""
 import hmac
 import hashlib
 import secrets
@@ -21,12 +27,34 @@ wallet = APIRouter(prefix="/wallet", tags=["wallet"])
 settings = get_settings()
 
 
-@wallet.post("/deposit")
+@wallet.post(
+    "/deposit",
+    summary="Initialize deposit",
+    description=(
+        "Create a pending deposit transaction and initialize a Paystack "
+        "payment session. Returns a `reference` and `authorization_url` for "
+        "the client to complete payment."
+    ),
+)
 async def init_deposit(
     req: DepositReq,
     principal=Depends(get_principal),
     session: AsyncSession = Depends(get_session),
 ):
+    """Initialize a deposit via Paystack.
+
+    Args:
+        req: deposit amount and any client-provided data.
+        principal: authenticated principal.
+        session: DB session.
+
+    Returns:
+        JSON with `reference` and `authorization_url` for completing payment.
+
+    Raises:
+        HTTPException(401) if caller lacks permission.
+        HTTPException(502) if Paystack initialization fails.
+    """
     require_permission(principal, "deposit")
     try:
         if principal["type"] == "user":
@@ -75,10 +103,26 @@ async def init_deposit(
         raise HTTPException(status_code=502, detail="Paystack Initialization failed")
 
 
-@wallet.post("/paystack/webhook")
+@wallet.post(
+    "/paystack/webhook",
+    summary="Paystack webhook",
+    description=(
+        "Endpoint for Paystack to POST transaction status updates. Validates "
+        "the HMAC signature and updates the internal transaction and wallet "
+        "records accordingly."
+    ),
+)
 async def paystack_webhook(
     request: Request, session: AsyncSession = Depends(get_session)
 ):
+    """Handle Paystack webhook callbacks.
+
+    This endpoint validates the `x-paystack-signature` header and applies
+    transaction updates atomically to the database.
+
+    Raises:
+        HTTPException(400) for missing or invalid signature.
+    """
 
     body = await request.body()
     sig = request.headers.get("x-paystack-signature")
@@ -131,10 +175,21 @@ async def paystack_webhook(
         return {"status": True}
 
 
-@wallet.get("/deposit/{reference}/status")
+@wallet.get(
+    "/deposit/{reference}/status",
+    summary="Deposit status",
+    description="Return the status and amount for a deposit identified by reference.",
+)
 async def deposit_status(
     reference: str, principal=Depends(get_principal), session=Depends(get_session)
 ):
+    """Check deposit status by reference.
+
+    Requires read permission. Returns reference, status, and amount.
+
+    Raises:
+        HTTPException(404) if transaction not found.
+    """
     require_permission(principal, "read")
 
     tx = await session.execute(
@@ -149,10 +204,18 @@ async def deposit_status(
     return {"reference": reference, "status": tx.status.value, "amount": tx.amount}
 
 
-@wallet.get("/balance")
+@wallet.get(
+    "/balance",
+    summary="Get wallet balance",
+    description="Return the current balance for the caller's wallet.",
+)
 async def balance(
     principal=Depends(get_principal), session: AsyncSession = Depends(get_session)
 ):
+    """Return the wallet balance for the authenticated principal.
+
+    Requires read permission.
+    """
 
     require_permission(principal, "read")
 
@@ -170,12 +233,28 @@ async def balance(
     return {"balance": wallet.balance}
 
 
-@wallet.post("/transfer")
+@wallet.post(
+    "/transfer",
+    summary="Transfer funds",
+    description=(
+        "Transfer funds from the caller's wallet to another wallet by "
+        "wallet number. Requires 'transfer' permission."
+    ),
+)
 async def transfer(
     req: TransferReq,
     principal=Depends(get_principal),
     session: AsyncSession = Depends(get_session),
 ):
+    """Transfer funds between wallets.
+
+    Validates balances, deducts and credits wallets, and creates two
+    transaction records representing the debit and credit.
+
+    Raises:
+        HTTPException(404) if recipient not found.
+        HTTPException(400) for insufficient balance.
+    """
     require_permission(principal, "transfer")
 
     if principal["type"] == "user":
@@ -239,10 +318,19 @@ async def transfer(
     return {"status": "success", "message": "Transfer completed"}
 
 
-@wallet.get("/transactions")
+@wallet.get(
+    "/transactions",
+    summary="List transactions",
+    description="Return recent transactions for the authenticated principal.",
+)
 async def transactions(
     principal=Depends(get_principal), session: AsyncSession = Depends(get_session)
 ):
+    """List transactions for the caller's wallet.
+
+    Requires read permission. Returns an array of transactions (type, amount,
+    status and reference).
+    """
     require_permission(principal, "read")
     if principal["type"] == "user":
         user = principal["user"][0]

@@ -27,7 +27,7 @@ async def create_key(
         raise HTTPException(
             status_code=401, detail="Unauthorized\nOnly users may create API keys"
         )
-    user = principal["user"][0  ]
+    user = principal["user"][0]
 
     now_utc = datetime.now(timezone.utc)
     user_id = user.id
@@ -64,20 +64,25 @@ async def create_key(
 
 
 @keys.post("/rollover")
-def rollover(
-    req: RolloverReq, principal=Depends(get_principal), session=Depends(get_session)
+async def rollover(
+    req: RolloverReq,
+    principal=Depends(get_principal),
+    session: AsyncSession = Depends(get_session),
 ):
     if principal["type"] != "user":
         raise HTTPException(
             status_code=401, detail="Unauthorized\nOnly users may rollover API keys"
         )
 
-    ak = session.get(APIKey, req.expired_key_id)
+    ak = await session.get(APIKey, req.expired_key_id)
+    now_utc = datetime.now(timezone.utc)
+    print(ak)
 
-    if not ak or ak.user_id != principal["user"] or ak.revoked:
+    if not ak or ak.user_id != principal["user"][0].id or ak.revoked:
         raise HTTPException(status_code=404, detail="API key not found")
 
-    if ak.expires_at < datetime.now(timezone.utc):
+    aware_expires_at = ak.expires_at.replace(tzinfo=timezone.utc)
+    if aware_expires_at < now_utc:
         raise HTTPException(status_code=400, detail="API key has expired")
 
     raw = "sk_" + secrets.token_urlsafe(32)
@@ -87,7 +92,7 @@ def rollover(
     ak.fingerprint = fingerprint
 
     session.add(ak)
-    session.commit()
-    session.refresh(ak)
+    await session.commit()
+    await session.refresh(ak)
 
     return {"api_key": f"{fingerprint}.{raw}", "expires_at": parse_expiry(req.expiry)}

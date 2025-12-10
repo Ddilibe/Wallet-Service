@@ -1,26 +1,22 @@
 meta {
-  name: CreateKey
+  name: RollOver
   type: http
-  seq: 1
+  seq: 2
 }
 
 post {
-  url: http://localhost:2222/keys/create
+  url: http://localhost:2222/keys/rollover
   body: json
-  auth: none
+  auth: inherit
 }
 
 headers {
   Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImdsZW4wMEBleGFtcGxlLm5ldCIsIm5hbWUiOiJKb3JkYW4gUmljaGFyZHNvbiIsImlkIjoyLCJjcmVhdGVkX2F0IjoiMjAyNS0xMi0xMFQwOToxNDo1NiswMDowMFoifQ.zdIMSn5y_EUNllYr3gyBWnchgqAhCsi0ekk7aSsTaK4
-  ~x-api-key: 
 }
 
 body:json {
   {
-    "name": "string",
-    "permissions": [
-      "deposit"
-    ],
+    "expired_key_id": 1,
     "expiry": "1D"
   }
 }

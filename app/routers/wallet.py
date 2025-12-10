@@ -134,6 +134,7 @@ async def paystack_webhook(
     computed = hmac.new(
         settings.PAYSTACK_SECRET_KEY.encode(), body, hashlib.sha512
     ).hexdigest()
+    print(computed)
 
     if not hmac.compare_digest(computed, sig):
         raise HTTPException(400, "Invalid signature")

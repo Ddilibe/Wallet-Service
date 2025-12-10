@@ -32,7 +32,7 @@ oauth.register(
     client_secret=settings.GOOGLE_CLIENT_SECRET,
     client_kwargs={
         "scope": "openid email profile",
-        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        # "redirect_uri": settings.GOOGLE_REDIRECT_URI,
     },
 )
 
@@ -53,8 +53,8 @@ async def google(request: Request):
     """
     redirect_uri = request.url_for("google_callback")
 
-    # IMPORTANT: force absolute URL
     redirect_uri = str(redirect_uri)
+    print("REDIRECT URI:", redirect_uri)
 
     return await oauth.google.authorize_redirect(  # type: ignore
         request, redirect_uri=redirect_uri
@@ -74,7 +74,7 @@ async def google_callback(
     request: Request, session: AsyncSession = Depends(get_session)
 ):
     try:
-        token = await oauth.google.authorize_access_token(request)  # type: ignore
+        token = await oauth.google.authorize_access_token(request)  # type:ignore
 
         print("GOOGLE TOKEN:", token)
 
@@ -100,7 +100,7 @@ async def google_callback(
         await session.commit()
         await session.refresh(user)
 
-        wallet = Wallet(user_id=user.id, balance=0, wallet_number=str(uuid.uuid4())[:6]) # type: ignore
+        wallet = Wallet(user_id=user.id, balance=0, wallet_number=str(uuid.uuid4())[:6])  # type: ignore
         session.add(wallet)
         await session.commit()
         await session.refresh(wallet)

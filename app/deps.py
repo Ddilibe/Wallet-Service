@@ -22,12 +22,12 @@ def hash_api_key(key: str) -> str:
 
 async def get_principal(
     x_api_key: Optional[str] = Header(None),
-    Authorization: Optional[str] = Header(None),
+    authorization_key: Optional[str] = Header(None),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, str]:
     response = dict()
-    if Authorization:
-        parts = Authorization.split()
+    if authorization_key:
+        parts = authorization_key.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":
             raise HTTPException(status_code=401, detail="Invalid authorization header")
 
@@ -105,5 +105,5 @@ def parse_expiry(exp: str) -> datetime:
     }
 
     if exp not in units.keys():
-        raise ValueError("Invalid expiry format")
+        raise HTTPException(status_code=400, detail="Invalid expiry format")
     return now + units[exp]

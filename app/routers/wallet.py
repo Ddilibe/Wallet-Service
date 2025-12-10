@@ -163,9 +163,7 @@ async def paystack_webhook(
     if status == "success":
 
         user = await session.get(User, tx.user_id)
-        w = await session.execute(
-            select(Wallet).where(Wallet.user_id == user.id)
-        )
+        w = await session.execute(select(Wallet).where(Wallet.user_id == user.id))
 
         # async with session.begin():
         # w = await session.execute(select(Wallet).where(Wallet.id == t ))
@@ -290,42 +288,42 @@ async def transfer(
     if sender.balance < req.amount:
         raise HTTPException(400, "insufficient balance")
 
-    async with session.begin():
-        s = await session.execute(select(Wallet).where(Wallet.id == sender.id))
-        s = s.one()
-        r = await session.execute(select(Wallet).where(Wallet.id == recipient.id))
-        r = r.one()
+    # async with session.begin():
+    s = await session.execute(select(Wallet).where(Wallet.id == sender.id))
+    s = s.one()
+    r = await session.execute(select(Wallet).where(Wallet.id == recipient.id))
+    r = r.one()
 
-        if s.balance < req.amount:
-            raise HTTPException(400, "insufficient balance")
+    if s.balance < req.amount:
+        raise HTTPException(400, "insufficient balance")
 
-        s.balance -= req.amount
-        r.balance += req.amount
-        ref = "tr_" + secrets.token_urlsafe(10)
+    s.balance -= req.amount
+    r.balance += req.amount
+    ref = "tr_" + secrets.token_urlsafe(10)
 
-        tx1 = Transaction(
-            tx_type=TransactionType.transfer,
-            amount=-req.amount,
-            status=TransactionStatus.success,
-            reference=ref,
-            user_id=actor.id,  # type: ignore
-        )
+    tx1 = Transaction(
+        tx_type=TransactionType.transfer,
+        amount=-req.amount,
+        status=TransactionStatus.success,
+        reference=ref,
+        user_id=actor.id,  # type: ignore
+    )
 
-        tx2 = Transaction(
-            tx_type=TransactionType.transfer,
-            amount=req.amount,
-            status=TransactionStatus.success,
-            reference=ref,
-            user_id=actor.id,  # type: ignore
-        )
+    tx2 = Transaction(
+        tx_type=TransactionType.transfer,
+        amount=req.amount,
+        status=TransactionStatus.success,
+        reference=ref,
+        user_id=actor.id,  # type: ignore
+    )
 
-        session.add(s)
-        session.add(r)
-        session.add(tx1)
-        session.add(tx2)
-        await session.commit()
-        await session.refresh(tx1)
-        await session.refresh(tx2)
+    session.add(s)
+    session.add(r)
+    session.add(tx1)
+    session.add(tx2)
+    await session.commit()
+    await session.refresh(tx1)
+    await session.refresh(tx2)
 
     return {"status": "success", "message": "Transfer completed"}
 
@@ -356,7 +354,7 @@ async def transactions(
         .where(Transaction.id == user.id)  # type: ignore
         .order_by(desc(Transaction.created_at))
     )
-    txs = txs.all()
+    txs = txs.scalars().all()
     out = [
         {
             "type": t.tx_type,

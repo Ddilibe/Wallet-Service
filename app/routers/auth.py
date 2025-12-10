@@ -100,7 +100,7 @@ async def google_callback(
         await session.commit()
         await session.refresh(user)
 
-        wallet = Wallet(user_id=user.id, balance=0, wallet_number=str(uuid.uuid4())[:6])
+        wallet = Wallet(user_id=user.id, balance=0, wallet_number=str(uuid.uuid4())[:6]) # type: ignore
         session.add(wallet)
         await session.commit()
         await session.refresh(wallet)

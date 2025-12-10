@@ -84,7 +84,7 @@ async def init_deposit(
         resp = requests.post(
             "https://api.paystack.co/transaction/initialize",
             headers={
-                "Authorization": f"Bearer {settings.PAYSTACK_PUBLIC_KEY}",
+                "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
                 "Content-Type": "application/json",
             },
             json={"amount": req.amount, "reference": ref, "email": user.email},

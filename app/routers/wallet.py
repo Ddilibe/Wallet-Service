@@ -162,10 +162,15 @@ async def paystack_webhook(
 
     if status == "success":
 
-        async with session.begin():
-            w = await session.execute(select(Wallet).where(Wallet.id == tx.wallet_id))
-            w = w.scalars().first()
-            w.balance += tx.amount  # type: ignore
+        user = await session.get(User, tx.user_id)
+        w = await session.execute(
+            select(Wallet).where(Wallet.user_id == user.id)
+        )
+
+        # async with session.begin():
+        # w = await session.execute(select(Wallet).where(Wallet.id == t ))
+        w = w.scalars().first()
+        w.balance += tx.amount  # type: ignore
 
         tx.status = TransactionStatus.success
         tx.updated_at = datetime.now(timezone.utc)

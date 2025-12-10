@@ -132,10 +132,12 @@ async def paystack_webhook(
         raise HTTPException(400, "Missing signature")
 
     payload = await request.json()
+    print("Payload: ", payload)
+
     computed = hmac.new(
         settings.PAYSTACK_SECRET_KEY.encode(), payload, hashlib.sha512
     ).hexdigest()
-    print(computed)
+    print("Computed Signature: ",computed)
 
     if not hmac.compare_digest(computed, sig):
         raise HTTPException(400, "Invalid signature")

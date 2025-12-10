@@ -1,0 +1,26 @@
+meta {
+  name: CreateKey
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://localhost:2222/key/create
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "string",
+    "permissions": [
+      "deposit"
+    ],
+    "expiry": "string"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

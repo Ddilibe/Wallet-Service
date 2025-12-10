@@ -1,0 +1,15 @@
+meta {
+  name: Google Callback
+  type: http
+  seq: 1
+}
+
+get {
+  url: http://localhost:2222/auth/google/callback
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

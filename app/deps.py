@@ -21,13 +21,13 @@ def hash_api_key(key: str) -> str:
 
 
 async def get_principal(
-    authorization: Optional[str] = Header(None),
     x_api_key: Optional[str] = Header(None),
-    session=Depends(get_session),
-):
-    print(authorization)
-    if authorization:
-        parts = authorization.split()
+    Authorization: Optional[str] = Header(None),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    response = dict()
+    if Authorization:
+        parts = Authorization.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":
             raise HTTPException(status_code=401, detail="Invalid authorization header")
 
@@ -38,35 +38,46 @@ async def get_principal(
             payload = jwt.decode(
                 token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
             )
-            user_id = payload.get("user_id")
+            user_id = payload.get("id")
+            print(payload)
 
             if not user_id:
                 raise HTTPException(status_code=401, detail="Invalid token")
 
-            user = session.exec(select(User).where(User.id == user_id)).first()
+            query = await session.execute(select(User).where(User.id == user_id))
+            user = query.first()
 
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
 
-            return user
+            response.update({"type": "user", "user": user})
+
+            return response
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token has expired")
 
     if x_api_key:
         try:
-            key = session.exec(
+            query = await session.execute(
                 select(APIKey).where(APIKey.key_hash == hash_api_key(x_api_key))
-            ).first()
+            )
+            key = query.first()
 
             if not key or key.revoked or key.expires_at > datetime.now(timezone.utc):
                 raise HTTPException(status_code=401, detail="Invalid API key")
 
-            user = session.exec(select(User).where(User.id == key.user_id)).first()
+            query = await session.execute(select(User).where(User.id == key.user_id))
+            user = query.first()
 
-            return user
+            if not user:
+                raise HTTPException(status_code=401, detail="User not found")
+
+            response.update({"type": "api", "user": user})
+
+            return response
 
         except Exception:
-            raise Exception("Invalid API key")
+            raise HTTPException(status_code=401, detail="Invalid API key")
 
     raise HTTPException(
         status_code=401, detail="Missing authorization header or API key"
@@ -86,13 +97,13 @@ def require_permission(principal, permission):
 
 def parse_expiry(exp: str) -> datetime:
     now = datetime.now(timezone.utc)
-    units = dict(
-        H1=timedelta(hours=1),
-        D1=timedelta(days=1),
-        M1=timedelta(days=30),
-        Y1=timedelta(days=365),
-    )
-    val = sorted(exp.upper(), reverse=True)
-    if val not in units:
+    units = {
+        "1H": timedelta(hours=1),
+        "1D": timedelta(days=1),
+        "1M": timedelta(days=30),
+        "1Y": timedelta(days=365),
+    }
+
+    if exp not in units.keys():
         raise ValueError("Invalid expiry format")
-    return now + units[val]
+    return now + units[exp]

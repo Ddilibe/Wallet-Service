@@ -151,8 +151,8 @@ async def paystack_webhook(
     status = data.get("status")
 
     tx = await session.execute(select(Transaction).where(Transaction.reference == ref))
-    print("Transaction: ", tx)
     tx = tx.first()  # type: ignore
+    print("Transaction: ", tx)
 
     if not tx:
         return {"status": True}

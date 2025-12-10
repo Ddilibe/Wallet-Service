@@ -151,7 +151,7 @@ async def paystack_webhook(
     status = data.get("status")
 
     tx = await session.execute(select(Transaction).where(Transaction.reference == ref))
-    tx = tx.first()[0]  # type: ignore
+    tx = tx.first()  # type: ignore
 
     if not tx:
         return {"status": True}
@@ -203,7 +203,7 @@ async def deposit_status(
     tx = await session.execute(
         select(Transaction).where(Transaction.reference == reference)
     )
-    tx = tx.first()[0]
+    tx = tx.first()
 
     if not tx:
         raise HTTPException(404, "not found")
@@ -233,7 +233,7 @@ async def balance(
         user = await session.get(User, principal["api_key"][0].user_id)
 
     wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))  # type: ignore
-    wallet = wallet.first()[0]  # type: ignore
+    wallet = wallet.first()  # type: ignore
 
     if not wallet:
         raise HTTPException(404, "Wallet not found")
@@ -271,12 +271,12 @@ async def transfer(
         actor = await session.get(User, principal["api_key"][0].user_id)
 
     sender = await session.execute(select(Wallet).where(Wallet.user_id == actor.id))  # type: ignore
-    sender = sender.first()[0]  # type: ignore
+    sender = sender.first()  # type: ignore
 
     recipient = await session.execute(
         select(Wallet).where(Wallet.wallet_number == req.wallet_number)
     )
-    recipient = recipient.first()[0]  # type: ignore
+    recipient = recipient.first()  # type: ignore
 
     if not recipient:
         raise HTTPException(404, "recipient not found")

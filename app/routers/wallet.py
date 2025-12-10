@@ -103,7 +103,7 @@ async def init_deposit(
         raise HTTPException(status_code=502, detail="Paystack Initialization failed")
 
 
-@wallet.get(
+@wallet.post(
     "/paystack/webhook",
     summary="Paystack webhook",
     description=(

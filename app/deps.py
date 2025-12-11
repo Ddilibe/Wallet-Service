@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import json
 import hashlib
 from typing import Optional
 from datetime import datetime, timezone, timedelta
@@ -39,7 +40,6 @@ async def get_principal(
                 token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
             )
             user_id = payload.get("id")
-            print(payload)
 
             if not user_id:
                 raise HTTPException(status_code=401, detail="Invalid token")
@@ -58,13 +58,19 @@ async def get_principal(
 
     if x_api_key:
         try:
+            _, x = x_api_key.split(".")
+            api_key = hash_api_key(x)
             query = await session.execute(
-                select(APIKey).where(APIKey.key_hash == hash_api_key(x_api_key))
+                select(APIKey).where(APIKey.key_hash == api_key)
             )
             key = query.scalars().first()
 
-            if not key or key.revoked or key.expires_at > datetime.now(timezone.utc):
+            if not key:
                 raise HTTPException(status_code=401, detail="Invalid API key")
+            if key.revoked:
+                raise HTTPException(status_code=401, detail="API key has been revoked")
+            if key.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+                raise HTTPException(status_code=401, detail="API key has expired")
 
             query = await session.execute(select(User).where(User.id == key.user_id))
             user = query.scalars().first()
@@ -72,11 +78,17 @@ async def get_principal(
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
 
-            response.update({"type": "api_key", "user": user})
+            response.update(
+                {
+                    "type": "api_key",
+                    "user": user,
+                    "api_key": key,
+                }
+            )
 
             return response
 
-        except Exception:
+        except Exception as e:
             raise HTTPException(status_code=401, detail="Invalid API key")
 
     raise HTTPException(
@@ -89,6 +101,7 @@ def require_permission(principal, permission):
 
     if principal["type"] == "user":
         return
+
     ak = principal["api_key"]
     if permission not in ak.permissions:
         raise HTTPException(status_code=403, detail="Insufficient permissions")

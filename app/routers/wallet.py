@@ -64,7 +64,6 @@ async def init_deposit(
 
         wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))
         wallet = wallet.scalars().first()  # type: ignore
-        print(wallet)
 
         if not wallet:
             raise HTTPException(404, "Wallet not found")
@@ -99,7 +98,6 @@ async def init_deposit(
             "authorization_url": data["data"]["authorization_url"],
         }
     except Exception as e:
-        print(e)
         raise HTTPException(status_code=502, detail="Paystack Initialization failed")
 
 
@@ -125,23 +123,18 @@ async def paystack_webhook(
     """
 
     body = await request.body()
-    print(request.headers)
     sig = request.headers.get("x-paystack-signature")
 
     if not sig:
         raise HTTPException(400, "Missing signature")
 
     payload = await request.json()
-    print("Payload: ", payload)
-    print("Body: ", body)
-    print("Signature: ", sig)
 
     computed = hmac.new(
         key=settings.PAYSTACK_SECRET_KEY.encode("utf-8"),
         msg=body,
         digestmod=hashlib.sha512,
     ).hexdigest()
-    print("Computed Signature: ", computed)
 
     if not hmac.compare_digest(computed, sig):
         raise HTTPException(400, "Invalid signature")
@@ -152,7 +145,6 @@ async def paystack_webhook(
 
     tx = await session.execute(select(Transaction).where(Transaction.reference == ref))
     tx = tx.scalars().first()  # type: ignore
-    print("Transaction: ", tx)
 
     if not tx:
         return {"status": True}
@@ -211,7 +203,6 @@ async def deposit_status(
 
     if not tx:
         raise HTTPException(404, "not found")
-    print(tx)
 
     return {"reference": reference, "status": tx.status.value, "amount": tx.amount}
 
@@ -347,7 +338,7 @@ async def transactions(
         user = principal["user"]
     else:
         user = await session.get(User, principal["api_key"].user_id)
-    print(user)
+
     wallet = await session.execute(select(Wallet).where(Wallet.user_id == user.id))  # type: ignore
     wallet = wallet.scalars().first()
     txs = await session.execute(

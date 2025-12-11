@@ -49,7 +49,6 @@ async def create_key(
         HTTPException(401) if principal is not a user.
         HTTPException(400) if the user already has 5 active keys.
     """
-    print(principal["user"])
     if principal["type"] != "user":
         raise HTTPException(
             status_code=401, detail="Unauthorized\nOnly users may create API keys"
@@ -125,7 +124,6 @@ async def rollover(
 
     ak = await session.get(APIKey, req.expired_key_id)
     now_utc = datetime.now(timezone.utc)
-    print(ak)
 
     if not ak or ak.user_id != principal["user"].id or ak.revoked:
         raise HTTPException(status_code=404, detail="API key not found")

@@ -54,7 +54,6 @@ async def google(request: Request):
     redirect_uri = request.url_for("google_callback")
 
     redirect_uri = str(redirect_uri)
-    print("REDIRECT URI:", redirect_uri)
 
     return await oauth.google.authorize_redirect(  # type: ignore
         request, redirect_uri=redirect_uri
@@ -76,10 +75,7 @@ async def google_callback(
     try:
         token = await oauth.google.authorize_access_token(request)  # type:ignore
 
-        print("GOOGLE TOKEN:", token)
-
     except Exception as e:
-        print("GOOGLE OAUTH ERROR:", e)
         raise HTTPException(status_code=400, detail="Google OAuth failed")
 
     user_info = token.get("userinfo")

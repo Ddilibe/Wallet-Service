@@ -299,13 +299,15 @@ async def transfer(
 
     s.balance -= req.amount
     r.balance += req.amount
-    ref = "tr_" + secrets.token_urlsafe(10)
+    ref1 = "tr_" + secrets.token_urlsafe(10)
+    ref2 = "tr_" + secrets.token_urlsafe(10)
+
 
     tx1 = Transaction(
         tx_type=TransactionType.transfer,
         amount=-req.amount,
         status=TransactionStatus.success,
-        reference=ref,
+        reference=ref1,
         user_id=actor.id,  # type: ignore
     )
 
@@ -313,7 +315,7 @@ async def transfer(
         tx_type=TransactionType.transfer,
         amount=req.amount,
         status=TransactionStatus.success,
-        reference=ref,
+        reference=ref2,
         user_id=actor.id,  # type: ignore
     )
 

@@ -302,7 +302,6 @@ async def transfer(
     ref1 = "tr_" + secrets.token_urlsafe(10)
     ref2 = "tr_" + secrets.token_urlsafe(10)
 
-
     tx1 = Transaction(
         tx_type=TransactionType.transfer,
         amount=-req.amount,
@@ -353,7 +352,7 @@ async def transactions(
     wallet = wallet.scalars().first()
     txs = await session.execute(
         select(Transaction)
-        .where(Transaction.id == user.id)  # type: ignore
+        .where(Transaction.user_id == user.id)  # type: ignore
         .order_by(desc(Transaction.created_at))
     )
     txs = txs.scalars().all()

@@ -290,9 +290,9 @@ async def transfer(
 
     # async with session.begin():
     s = await session.execute(select(Wallet).where(Wallet.id == sender.id))
-    s = s.one()
+    s = s.scalars().first()
     r = await session.execute(select(Wallet).where(Wallet.id == recipient.id))
-    r = r.one()
+    r = r.scalars().first()
 
     if s.balance < req.amount:
         raise HTTPException(400, "insufficient balance")
